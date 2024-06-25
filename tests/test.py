@@ -22,12 +22,13 @@ from utils.config import Config
 
 if __name__ == "__main__":
     # Define the configuration
-    amqp_broker = "your_amqp_broker_url"
+    amqp_broker = "URL/PORT"
     capability = {
-        "endpoint": "your_endpoint"
+        "FIELD 1": "VALUE 1",
+        "FIELD 2": "VALUE 2",
     }
     config = Config(amqp_broker, capability)
 
     # Initialize and start the measurement agent
     agent = CustomMeasurementAgent(config)
-    agent.subscribe_to_telemetry_service()
+    agent.start()

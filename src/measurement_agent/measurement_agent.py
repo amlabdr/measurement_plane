@@ -25,7 +25,7 @@ class MeasurementAgent:
         url = self.config.amqp_broker
         self.sender.send(url, topic = topic_reply_to, messages= receipt_msg)
 
-    def subscribe_to_telemetry_service(self):
+    def start(self):
         endpoint = self.config.capability["endpoint"]
         topic='topic://'+endpoint+'/specifications'
         url = self.config.amqp_broker
