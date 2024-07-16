@@ -1,0 +1,2 @@
+[console_scripts]
+start-agent = measurement_plane.start_agent:start_agent

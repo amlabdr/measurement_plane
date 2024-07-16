@@ -1,0 +1,2 @@
+python-dateutil
+python-qpid-proton==0.39.0

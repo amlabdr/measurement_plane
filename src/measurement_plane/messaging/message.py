@@ -1,4 +1,4 @@
-from src.messaging.message_format import MessageFields
+from measurement_plane.messaging.message_format import MessageFields
 from datetime import datetime
 
 class Message:

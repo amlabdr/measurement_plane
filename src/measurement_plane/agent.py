@@ -4,11 +4,11 @@ import time
 import threading
 from datetime import datetime
 from threading import Thread, Event
-from src.utils.decorators import registered_capabilities
-from src.base_capability import BaseCapability
-from src.protocols.amqp.receive import Receiver
-from src.protocols.amqp.send import Sender
-from src.messaging.message_format import Topics, MessageFields, Ids, TaskSchedule
+from measurement_plane.utils.decorators import registered_capabilities
+from measurement_plane.base_capability import BaseCapability
+from measurement_plane.protocols.amqp.receive import Receiver
+from measurement_plane.protocols.amqp.send import Sender
+from measurement_plane.messaging.message_format import Topics, MessageFields, Ids, TaskSchedule
 class Agent:
     def __init__(self, broker : str, endpoint : str):
         self.broker = broker

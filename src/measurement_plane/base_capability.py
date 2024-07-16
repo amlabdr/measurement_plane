@@ -1,5 +1,5 @@
-from src.messaging.message import CapabilityMessage
-from src.messaging.message_format import MessageFields
+from measurement_plane.messaging.message import CapabilityMessage
+from measurement_plane.messaging.message_format import MessageFields
 
 class BaseCapability:
     """
