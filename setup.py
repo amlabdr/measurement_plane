@@ -7,9 +7,10 @@ setup(
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     install_requires=[
-        "python-dateutil",
-        "python-qpid-proton==0.39.0",
-        "cffi>=1.0.0",
+        "python-qpid-proton==0.39.0",  # Required for AMQP
+        "python-dateutil>=2.8.0",      # For date manipulation
+        "jsonschema>=4.0.0",           # For JSON validation
+        "numpy>=1.21.0",               # For numerical processing
     ],
     entry_points={
         'console_scripts': [
