@@ -159,6 +159,8 @@ class Agent:
             
             if task_schedule.stream == "running":
                 results = results_queue.get()
+                if results == MessageFields.EOF_RESULTS:
+                    break
                 if results: self.send_result(specification_msg, results)
                 continue
 
@@ -189,5 +191,4 @@ class Agent:
         result_msg[MessageFields.RESULT_VALUES] = resultValues
         result_topic = Topics.get_results_topic(str(measurement_id))
         self.sender.send(self.broker, topic = result_topic, messages= result_msg)
-        logging.info("Result {} sent to {}".format(resultValues, result_topic))
-
+        
