@@ -5,10 +5,11 @@ import logging
 from datetime import datetime
 from threading import Thread, Event
 from jsonschema import validate, exceptions as jsonschema_exceptions
-from measurement_plane.protocols.amqp.receive import Receiver
+from measurement_plane.protocols.amqp.receive import ReceiverThread
 from measurement_plane.protocols.amqp.send import Sender
 from measurement_plane.messaging.message import Message
 from measurement_plane.measurement_plane_client.utils.broker import Broker
+import time
 
 class MeasurementPlaneClient:
     def __init__(self, broker_url) -> None:
@@ -17,45 +18,7 @@ class MeasurementPlaneClient:
         self.broker = Broker(self.broker_url)
         self.broker.start()
 
-    def get_capabilities(self, capability_types: list = None) -> dict:
-        capabilities_event = Event()
-        capabilities = {}
 
-        def capabilities_receiver_on_message_callback(event):
-            nonlocal capabilities
-            try:
-                capabilities = json.loads(event.message.body)
-                if capability_types:
-                    keys_to_delete = [cp_id for cp_id in capabilities if capabilities[cp_id]['capability'] not in capability_types]
-                    for cp_id in keys_to_delete:
-                        del capabilities[cp_id]
-            except KeyError as e:
-                logging.error(f"KeyError: {e}. Missing required keys in capability_body.")
-            finally:
-                capabilities_event.set()
-                event.container.stop()
-
-        topic = 'topic:///get_capabilities'
-        reply_to_topic = 'topic://' + ''.join(random.choices(string.ascii_letters + string.digits, k=10))
-
-        capabilities_receiver = Receiver(on_message_callback=capabilities_receiver_on_message_callback)
-        thread_capabilities_receiver = Thread(target=capabilities_receiver.receive_event, args=(self.broker_url, reply_to_topic))
-        thread_capabilities_receiver.start()
-
-        self.sender.send(self.broker_url, topic, "", reply_to_topic)
-
-        capabilities_event.wait(timeout=2)
-        capabilities_receiver.container.stop()
-        thread_capabilities_receiver.join()
-        # Create a list of the dictionary's keys
-        keys = list(capabilities.keys())
-
-        i = 0
-        for id in keys:
-            capabilities[i] = capabilities.pop(id)
-            i += 1
-        return capabilities if capabilities else {}
-    
     def get_capabilities(self, capability_types: list = None) -> dict:
         capabilities = self.broker.capability_manager.capabilities
         if capability_types:
@@ -79,14 +42,13 @@ class MeasurementPlaneClient:
             specification_topic = f'topic://{spec_endpoint}/specifications'
             reply_to_topic = 'topic://' + ''.join(random.choices(string.ascii_letters + string.digits, k=10))
 
-            measurement.receipt_receiver = Receiver(on_message_callback=measurement.receipt_receiver_on_message_callback)
-            thread_receipt_receiver = Thread(target=measurement.receipt_receiver.receive_event, args=(self.broker_url, reply_to_topic))
-            thread_receipt_receiver.start()
+            measurement.receipt_receiver = ReceiverThread(broker_url=self.broker_url, topic = reply_to_topic, on_message_callback=measurement.receipt_receiver_on_message_callback)
+            measurement.receipt_receiver.start()
 
             self.sender.send(self.broker_url, specification_topic, measurement.specification_message, reply_to_topic)
 
-            thread_receipt_receiver.join(timeout=2)
-            measurement.receipt_receiver.container.stop()
+            measurement.receipt_receiver.thread.join(timeout=5)
+            measurement.receipt_receiver.stop()
             logging.info("Measurement sent")
         else:
             logging.error("Measurement not valid for sending")
@@ -101,6 +63,7 @@ class Measurement:
         self.broker_url = self.measurement_plane_client.broker_url
         self.capability = capability
         self.results_receiver = None
+        self.receipt_receiver = None
         self.results = []
         self.config = {}
         self.specification_message = capability.copy()
@@ -134,9 +97,10 @@ class Measurement:
             else:
                 if self.results_receiver is None:
                     measurement_id = Message.calculate_measurement_id(message = receipt_msg)
-                    self.results_receiver = Receiver(on_message_callback=self.result_receiver_on_message_callback)
                     topic = f'topic://{measurement_id}/results'
-                    self.results_receiver.receive_event(self.broker_url, topic)
+                    #topic = f'topic:///test/results'
+                    self.results_receiver = ReceiverThread(broker_url=self.broker_url, topic = topic, on_message_callback=self.result_receiver_on_message_callback)
+                    self.results_receiver.start()
 
     def result_receiver_on_message_callback(self, event):
         message_body = event.message.body
@@ -168,7 +132,6 @@ class Measurement:
             results = result_msg['resultValues']
             if 'EOF_results' in results:
                 print("EOF received will stop")
-                self.config['result_callback'](results)
                 self.stop()
                 return
             self.config['result_callback'](results)
@@ -186,8 +149,9 @@ class Measurement:
         self.stop()
         
     def stop(self):
-        if self.results_receiver:
-            self.results_receiver.container.stop()
+        print("will close the receiver")
+        self.results_receiver.stop()
+            
 
     def validate_parameters(self, parameters: dict) -> bool:
         try:

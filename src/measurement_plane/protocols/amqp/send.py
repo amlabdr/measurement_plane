@@ -58,6 +58,7 @@ class SendHandler(MessagingHandler):
         self.confirmed = 0
         self.total = 1
         self.reply_to = reply_to
+        self.message_sent = False
 
     def on_connection_error(self, event):
         logging.error(f"Connection error while sending messages to server: {self.server} for topic: {self.topic}")
@@ -72,33 +73,37 @@ class SendHandler(MessagingHandler):
         event.container.create_sender(conn, self.topic)
 
     def on_sendable(self, event):
-        logging.info(f"Agent sending messages to topic {self.topic}")
-        try:
-            if contains_bytes(self.messages):
-                serialized_message = pickle.dumps(self.messages)
-                msg = Message(body=serialized_message)
-            else:
-                messages_serializable = convert_ndarray_to_list(self.messages)
-                
-                # Serialize the dictionary to JSON
-                msg = Message(body=json.dumps(messages_serializable))
-            msg.reply_to = self.reply_to    
-            event.sender.send(msg)
-            event.sender.close()
+        
+        if not self.message_sent:  # Ensure the message is sent only once
+            try:
+                logging.info(f"Agent sending messages to topic {self.topic}")
+                if contains_bytes(self.messages):
+                    serialized_message = pickle.dumps(self.messages)
+                    msg = Message(body=serialized_message, ttl=5000)
+                else:
+                    messages_serializable = convert_ndarray_to_list(self.messages)
+                    
+                    # Serialize the dictionary to JSON
+                    msg = Message(body=json.dumps(messages_serializable))
+                msg.reply_to = self.reply_to    
+                event.sender.send(msg)
+                self.message_sent = True 
 
-        except Exception as e:
-            logging.error(f"Error sending messages: {e}")
+            except Exception as e:
+                logging.error(f"Error sending messages: {e}")
 
     
 
     def on_rejected(self, event):
-        logging.error("msg rejected while sending msg to server: {} for topic: {}".format(self.server, self.topic))
-        return super().on_rejected(event)
+        logging.error(f"Message rejected for topic {self.topic}")
+        event.sender.close()  # Clean up the sender in case of rejection
+        event.connection.close()  # Close the connection if no more messages
         
     def on_accepted(self, event):
-        #logging.info("msg accepted in topic {}".format(self.topic))
+        logging.info("msg accepted in topic {}".format(self.topic))
         self.confirmed += 1
         if self.confirmed == self.total:
+            event.sender.close()
             event.connection.close()
 
     def on_disconnected(self, event):

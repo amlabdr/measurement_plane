@@ -6,7 +6,7 @@ from datetime import datetime
 from threading import Thread, Event
 from measurement_plane.utils.decorators import registered_capabilities
 from measurement_plane.base_capability import BaseCapability
-from measurement_plane.protocols.amqp.receive import Receiver
+from measurement_plane.protocols.amqp.receive import ReceiverThread
 from measurement_plane.protocols.amqp.send import Sender
 from measurement_plane.messaging.message_format import Topics, MessageFields, Ids, TaskSchedule
 class Agent:
@@ -48,9 +48,10 @@ class Agent:
 
             topic = Topics.get_specifications_topic(self.endpoint)
             logging.info("Agent will start lesstning for events")
-            receiver = Receiver(on_message_callback=self.handle_messages)
-            receiver.receive_event(self.broker, topic)
-            self.running = False
+            receiver_thread = ReceiverThread(self.broker, topic, on_message_callback=self.handle_messages)
+            receiver_thread.start()
+            
+            self.running = True
             return self.running
         else:
             self.running = False
@@ -159,6 +160,8 @@ class Agent:
             
             if task_schedule.stream == "running":
                 results = results_queue.get()
+                if results == MessageFields.EOF_RESULTS:
+                    break
                 if results: self.send_result(specification_msg, results)
                 continue
 
@@ -189,5 +192,4 @@ class Agent:
         result_msg[MessageFields.RESULT_VALUES] = resultValues
         result_topic = Topics.get_results_topic(str(measurement_id))
         self.sender.send(self.broker, topic = result_topic, messages= result_msg)
-        logging.info("Result {} sent to {}".format(resultValues, result_topic))
-
+        
