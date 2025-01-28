@@ -3,14 +3,12 @@ import threading
 import json
 from measurement_plane.messaging.message import Message
 import logging
-from measurement_plane.protocols.amqp.receive import Receiver
+from measurement_plane.protocols.amqp.receive import ReceiverThread
 from measurement_plane.protocols.amqp.send import Sender
+from measurement_plane.messaging.message_format import Topics
 
 CAPABILITY_TIMEOUT = 60
 CLEANUP_INTERVAL = 10
-RECEIVER_CAPABILITY_TOPIC = "topic:///capabilities"
-RECEIVER_SPECIFICATIONS_TOPIC = "topic:///specifications"
-RECEIVER_GET_CAPABILITIES_TOPIC = "topic:///get_capabilities"
 
 # Configure logging
 #logging.basicConfig(level=logging.INFO)  # Set the desired logging level
@@ -68,12 +66,8 @@ class Broker():
         self.capability_manager = CapabilitiesManager(CAPABILITY_TIMEOUT, CLEANUP_INTERVAL)
         self.sender = Sender()
     def start(self):
-        self.receiver_capabilities = Receiver(on_message_callback=self.receiver_capabilities_on_message_callback)
-        #self.receiver_specifications = Receiver(on_message_callback=self.receiver_specifications_on_message_callback)
-        #self.receiver_get_capabilities = Receiver(on_message_callback=self.receiver_get_capabilities_on_message_callback)
-        threading.Thread(target=self.receiver_capabilities.receive_event, args=(self.broker_url, RECEIVER_CAPABILITY_TOPIC)).start()
-        #threading.Thread(target=self.receiver_specifications.receive_event, args=(self.broker_url, RECEIVER_SPECIFICATIONS_TOPIC)).start()
-        #threading.Thread(target=self.receiver_get_capabilities.receive_event, args=(self.broker_url, RECEIVER_GET_CAPABILITIES_TOPIC)).start()
+        self.receiver_capabilities = ReceiverThread(broker_url=self.broker_url, topic=Topics.CAPABILITIES_TOPIC, on_message_callback=self.receiver_capabilities_on_message_callback)
+        self.receiver_capabilities.start()
 
     def receiver_capabilities_on_message_callback(self, event):
         try:
@@ -85,21 +79,5 @@ class Broker():
         except Exception as e:
             logging.error(f"Error processing message: {e}")
     
-    """def receiver_specifications_on_message_callback(self, event):
-        try:
-            reply_to = event.message.reply_to
-            message =json.loads(event.message.body)
-            spec_endpoint = message["endpoint"]
-            target_topic = f'topic://{spec_endpoint}/specifications'
-            self.sender.send(self.broker_url, topic = target_topic, messages= message, reply_to=reply_to)
-            logging.info(f"Redirected specification to {target_topic}: {message}")
-        except Exception as e:
-            logging.error(f"Error processing message: {e}")"""
 
-    """def receiver_get_capabilities_on_message_callback(self, event):
-        try:
-            target_topic = event.message.reply_to
-            self.sender.send(self.broker_url, topic = target_topic, messages= self.capability_manager.capabilities)
-        except Exception as e:
-            logging.error(f"Error processing message: {e}")"""
 

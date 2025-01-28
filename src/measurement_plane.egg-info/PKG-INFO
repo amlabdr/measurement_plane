@@ -4,8 +4,9 @@ Version: 0.1
 Summary: A description of your project.
 Requires-Python: >=3.6
 Description-Content-Type: text/markdown
-Requires-Dist: python-dateutil
 Requires-Dist: python-qpid-proton==0.39.0
-Requires-Dist: cffi>=1.0.0
+Requires-Dist: python-dateutil>=2.8.0
+Requires-Dist: jsonschema>=4.0.0
+Requires-Dist: numpy>=1.21.0
 
 This is a long description of the measurement_plane project.
