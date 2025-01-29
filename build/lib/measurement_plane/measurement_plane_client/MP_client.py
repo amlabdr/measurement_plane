@@ -105,7 +105,7 @@ class Measurement:
                             store_capability = store_capabilities[sc]
                         if store_capability:
                             storage_measurement = self.measurement_plane_client.create_measurement(store_capability)
-                            label = datetime.now().strftime('%Y-%m-%d_%H-%M-%S.%f')[:-4]
+                            label = self.specification_message[MessageFields.ENDPOINT]
                             measurement_id = Message.calculate_measurement_id(message = receipt_msg)
                             topic = f'topic://{measurement_id}/results'
                             command = "start"
