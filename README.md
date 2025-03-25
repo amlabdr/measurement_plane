@@ -75,7 +75,7 @@ class CustomMeasurementCapability(BaseCapability):
         # Define the schema for output results
         self.result_schema = {...}
 
-    def measure(self, parameters):
+    def stream(self, parameters):
         # Implement measurement logic here
         ...
     
