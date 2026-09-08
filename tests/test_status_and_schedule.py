@@ -16,6 +16,13 @@ from measurement_plane.messaging.message_format import (
 class DummyClient:
     broker_url = "nats://example.invalid:4222"
 
+    def __init__(self):
+        self.broker_client = self
+        self.unsubscribed = []
+
+    async def unsubscribe(self, key):
+        self.unsubscribed.append(key)
+
 
 class RecordingBroker:
     def __init__(self):
@@ -75,6 +82,41 @@ class StatusAndScheduleTests(unittest.TestCase):
         self.assertEqual(message[MessageFields.ERROR], "device disconnected")
         self.assertEqual(message[MessageFields.ERROR_TYPE], "RuntimeError")
         self.assertEqual(message[MessageFields.SOURCE][MessageFields.ENDPOINT], "/timetagger/alice")
+
+    def test_eof_waits_for_terminal_lifecycle_status(self):
+        async def scenario():
+            client = DummyClient()
+            capability = {
+                MessageFields.CAPABILITY: "test",
+                MessageFields.ENDPOINT: "/test",
+                MessageFields.CAPABILITY_NAME: "test",
+                MessageFields.PARAMETERS_SCHEMA: {"type": "object"},
+            }
+            events = []
+            measurement = Measurement(capability, client)
+            measurement.configure("now", {}, lambda _: None, completion_callback=lambda: None, lifecycle_callback=events.append)
+            measurement.result_subscription = "results"
+            measurement.event_subscription = "events"
+
+            async def delayed_failure():
+                await asyncio.sleep(0.01)
+                await measurement._event_handler("status", None, json.dumps({
+                    MessageFields.LIFECYCLE_EVENT: "measurement_failed",
+                    MessageFields.LIFECYCLE_STATE: LifecycleStates.FAILED,
+                    MessageFields.ERROR: "downstream unavailable",
+                }))
+
+            task = asyncio.create_task(delayed_failure())
+            await measurement._result_handler("results", None, json.dumps({
+                MessageFields.RESULT: "test",
+                MessageFields.RESULT_VALUES: [MessageFields.EOF_RESULTS],
+            }))
+            await task
+            self.assertEqual(measurement.state, LifecycleStates.FAILED)
+            self.assertEqual(events[0][MessageFields.ERROR], "downstream unavailable")
+            self.assertEqual(client.unsubscribed, ["results", "events"])
+
+        asyncio.run(scenario())
 
 
 if __name__ == "__main__":

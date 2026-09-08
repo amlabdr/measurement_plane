@@ -88,8 +88,10 @@ class Measurement:
         self.status_message = None
         self.error = None
         self.lifecycle_events = []
+        self._terminal_event = asyncio.Event()
 
     def configure(self, schedule: str, parameters: dict, result_callback, stream_results: bool = False, redirect_to_storage: bool = False, completion_callback = None, lifecycle_callback=None, execution_mode=None) -> bool:
+        self._terminal_event = asyncio.Event()
         if self.validate_parameters(parameters):
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-4]
             nonce = uuid.uuid4().hex
@@ -149,7 +151,7 @@ class Measurement:
             results = result_msg[MessageFields.RESULT_VALUES]
             if MessageFields.EOF_RESULTS in results:
                 logging.info("End of results received.")
-                await self.stop()
+                await self.stop(wait_for_terminal=True)
                 return
             logging.info(f"Results from {subject}")
             self.config['result_callback'](results)
@@ -174,6 +176,8 @@ class Measurement:
         self.status_message = event_msg.get(MessageFields.STATUS_MESSAGE)
         self.error = event_msg.get(MessageFields.ERROR)
         self.lifecycle_events.append(event_msg)
+        if self.state in {"completed", "interrupted", "failed"}:
+            self._terminal_event.set()
         lifecycle_callback = self.config.get("lifecycle_callback")
         if lifecycle_callback:
             try:
@@ -181,7 +185,12 @@ class Measurement:
             except Exception as e:
                 logging.error(f"Error in lifecycle callback: {e}", exc_info=True)
 
-    async def stop(self):
+    async def stop(self, wait_for_terminal=False):
+        if wait_for_terminal and not self._terminal_event.is_set():
+            try:
+                await asyncio.wait_for(self._terminal_event.wait(), timeout=0.5)
+            except asyncio.TimeoutError:
+                logging.debug("No terminal lifecycle event arrived before result cleanup")
         if self.result_subscription:
             await self.measurement_plane_client.broker_client.unsubscribe(self.result_subscription)
             self.result_subscription = None
